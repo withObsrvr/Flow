@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
+	"github.com/withObsrvr/Flow/internal/metrics"
 	"github.com/withObsrvr/pluginapi"
 	"gopkg.in/yaml.v2"
 )
@@ -138,4 +140,31 @@ func TestBuildPipeline(t *testing.T) {
 		return nil
 	}()
 	assert.NoError(t, err)
+}
+
+func TestMetrics(t *testing.T) {
+	// Reset metrics (in case other tests affected them)
+	metrics.MessagesProcessed.Reset()
+	metrics.ProcessingErrors.Reset()
+
+	// Simulate some activity
+	metrics.MessagesProcessed.WithLabelValues("test_pipeline", "test_processor").Inc()
+
+	// Get metrics
+	metricFamilies, err := prometheus.DefaultGatherer.Gather()
+	assert.NoError(t, err)
+
+	// Find our metric
+	var found bool
+	for _, mf := range metricFamilies {
+		if mf.GetName() == "flow_messages_processed_total" {
+			found = true
+			// Verify the metric exists with our labels
+			metric := mf.GetMetric()[0]
+			assert.Equal(t, "test_pipeline", metric.Label[0].GetValue())
+			assert.Equal(t, "test_processor", metric.Label[1].GetValue())
+			assert.Equal(t, float64(1), metric.Counter.GetValue())
+		}
+	}
+	assert.True(t, found, "Expected metric was not found")
 }

@@ -6,15 +6,19 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"plugin"
 	"sync"
 	"syscall"
+	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/yaml.v2"
 
+	"github.com/withObsrvr/Flow/internal/metrics"
 	"github.com/withObsrvr/pluginapi"
 )
 
@@ -280,18 +284,35 @@ func NewCoreEngine(pluginsDir, pipelineConfigFile string) (*CoreEngine, error) {
 func (ce *CoreEngine) ProcessMessage(ctx context.Context, pipelineName string, msg pluginapi.Message) error {
 	pl, ok := ce.Pipelines[pipelineName]
 	if !ok {
+		metrics.ProcessingErrors.WithLabelValues(pipelineName, "pipeline", "not_found").Inc()
 		return fmt.Errorf("pipeline %s not found", pipelineName)
 	}
+
+	// Increment source metric
+	metrics.MessagesProcessed.WithLabelValues(pipelineName, pl.Source.Name()).Inc()
+
+	// Process through processors
 	for _, proc := range pl.Processors {
+		start := time.Now()
 		if err := proc.Process(ctx, msg); err != nil {
+			metrics.ProcessingErrors.WithLabelValues(pipelineName, proc.Name(), "process_error").Inc()
 			return fmt.Errorf("processor %s failed: %w", proc.Name(), err)
 		}
+		metrics.ProcessingDuration.WithLabelValues(pipelineName, proc.Name()).Observe(time.Since(start).Seconds())
+		metrics.MessagesProcessed.WithLabelValues(pipelineName, proc.Name()).Inc()
 	}
+
+	// Process through consumers
 	for _, cons := range pl.Consumers {
+		start := time.Now()
 		if err := cons.Process(ctx, msg); err != nil {
+			metrics.ProcessingErrors.WithLabelValues(pipelineName, cons.Name(), "consume_error").Inc()
 			return fmt.Errorf("consumer %s failed: %w", cons.Name(), err)
 		}
+		metrics.ProcessingDuration.WithLabelValues(pipelineName, cons.Name()).Observe(time.Since(start).Seconds())
+		metrics.MessagesConsumed.WithLabelValues(pipelineName, cons.Name()).Inc()
 	}
+
 	return nil
 }
 
@@ -331,6 +352,19 @@ func main() {
 	pipelineConfigFile := flag.String("pipeline", "pipeline_example.yaml", "Path to the pipeline configuration YAML file")
 	flag.Parse()
 
+	// Start Prometheus metrics endpoint first
+	metricsAddr := ":2112"
+	go func() {
+		log.Printf("Starting metrics server on %s", metricsAddr)
+		http.Handle("/metrics", promhttp.Handler())
+		if err := http.ListenAndServe(metricsAddr, nil); err != nil {
+			log.Printf("Error starting metrics server: %v", err)
+		}
+	}()
+
+	// Give the metrics server a moment to start
+	time.Sleep(time.Second)
+
 	// Create the core engine without global plugin config
 	engine, err := NewCoreEngine(*pluginsDir, *pipelineConfigFile)
 	if err != nil {
@@ -350,8 +384,12 @@ func main() {
 			defer wg.Done()
 			log.Printf("Starting pipeline: %s", name)
 
+			// Test metric
+			metrics.MessagesProcessed.WithLabelValues(name, "startup").Inc()
+
 			// Start the source
 			if err := p.Source.Start(ctx); err != nil {
+				metrics.ProcessingErrors.WithLabelValues(name, "source", "startup_error").Inc()
 				log.Printf("Error in pipeline %s: %v", name, err)
 				cancel() // Cancel other pipelines on error
 				return

@@ -18,7 +18,7 @@ pipelines:
           network_passphrase: "Test SDF Network ; September 2015"
       - type: "flow/processor/contract-filter"
         config:
-          contract_id: "CCAZYBBVS2QTH3APAVR7HTKQUOZBZGFCSVQKLAGC3JJ4Z4ZHG66X4EFE"
+          contract_id: "CA2B6MIEWVZQZGOBLY6POMT7RGQK3GVJ3XBDNDKCYUYNCN65T6KWGWJE"
     consumers:
       - type: "SaveToZeroMQ"
         config:
