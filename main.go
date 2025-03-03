@@ -291,7 +291,7 @@ func (ce *CoreEngine) ProcessMessage(ctx context.Context, pipelineName string, m
 	// Increment source metric
 	metrics.MessagesProcessed.WithLabelValues(pipelineName, pl.Source.Name()).Inc()
 
-	// Process through processors
+	// Process through processors with better error context
 	for _, proc := range pl.Processors {
 		start := time.Now()
 		if err := proc.Process(ctx, msg); err != nil {
@@ -317,17 +317,34 @@ func (ce *CoreEngine) ProcessMessage(ctx context.Context, pipelineName string, m
 }
 
 // Shutdown stops sources and closes consumers.
-func (ce *CoreEngine) Shutdown() {
-	for _, pl := range ce.Pipelines {
+func (ce *CoreEngine) Shutdown(ctx context.Context) error {
+	var errs []error
+
+	for name, pl := range ce.Pipelines {
+		log.Printf("Shutting down pipeline: %s", name)
+
+		// Stop source with timeout
+		_, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
 		if err := pl.Source.Stop(); err != nil {
 			log.Printf("Error stopping source %s: %v", pl.Source.Name(), err)
+			errs = append(errs, fmt.Errorf("source %s: %w", pl.Source.Name(), err))
 		}
+
+		// Close consumers with timeout
 		for _, cons := range pl.Consumers {
 			if err := cons.Close(); err != nil {
 				log.Printf("Error closing consumer %s: %v", cons.Name(), err)
+				errs = append(errs, fmt.Errorf("consumer %s: %w", cons.Name(), err))
 			}
 		}
 	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("shutdown errors: %v", errs)
+	}
+	return nil
 }
 
 func verifyPipeline(p *Pipeline) {
@@ -370,7 +387,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error initializing core engine: %v", err)
 	}
-	defer engine.Shutdown()
+	defer engine.Shutdown(context.Background())
 
 	// Create a context with cancellation for managing pipeline lifecycles
 	ctx, cancel := context.WithCancel(context.Background())
