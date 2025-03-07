@@ -143,28 +143,31 @@ func TestBuildPipeline(t *testing.T) {
 }
 
 func TestMetrics(t *testing.T) {
-	// Reset metrics (in case other tests affected them)
+	// Reset metrics
 	metrics.MessagesProcessed.Reset()
-	metrics.ProcessingErrors.Reset()
 
-	// Simulate some activity
-	metrics.MessagesProcessed.WithLabelValues("test_pipeline", "test_processor").Inc()
+	// Simulate activity with new labels
+	metrics.MessagesProcessed.WithLabelValues(
+		"test_tenant",
+		"test_instance",
+		"test_pipeline",
+		"test_processor",
+	).Inc()
 
-	// Get metrics
+	// Verify with updated labels
 	metricFamilies, err := prometheus.DefaultGatherer.Gather()
 	assert.NoError(t, err)
 
-	// Find our metric
-	var found bool
 	for _, mf := range metricFamilies {
 		if mf.GetName() == "flow_messages_processed_total" {
-			found = true
-			// Verify the metric exists with our labels
 			metric := mf.GetMetric()[0]
-			assert.Equal(t, "test_pipeline", metric.Label[0].GetValue())
-			assert.Equal(t, "test_processor", metric.Label[1].GetValue())
+			assert.Equal(t, "test_tenant", metric.Label[0].GetValue())
+			assert.Equal(t, "test_instance", metric.Label[1].GetValue())
+			assert.Equal(t, "test_pipeline", metric.Label[2].GetValue())
+			assert.Equal(t, "test_processor", metric.Label[3].GetValue())
 			assert.Equal(t, float64(1), metric.Counter.GetValue())
+			return
 		}
 	}
-	assert.True(t, found, "Expected metric was not found")
+	t.Fatal("Expected metric was not found")
 }

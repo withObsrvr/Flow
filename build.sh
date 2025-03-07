@@ -50,4 +50,27 @@ update_dependencies
 verify_versions
 go build -buildmode=plugin -o ../flow/plugins/flow-processor-latestledger.so
 
+# Update and build processor plugin 
+echo "Updating and building processor plugin..."
+cd ../flow-processor-contract-events
+update_dependencies
+verify_versions
+go build -buildmode=plugin -o ../flow/plugins/flow-processor-contract-events.so
+
+# Update and build processor plugin
+echo "Updating and building processor plugin..."
+cd ../flow-processor-kale-metrics
+update_dependencies
+verify_versions
+go build -buildmode=plugin -o ../flow/plugins/flow-processor-kale-metrics.so
+
+# Update and build consumer plugin
+echo "Updating and building consumer plugin..."
+cd ../flow-consumer-zeromq
+update_dependencies
+verify_versions
+go build -buildmode=plugin -o ../flow/plugins/flow-consumer-zeromq.so
+
+
+
 echo "Build complete!" 

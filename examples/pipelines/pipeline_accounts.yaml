@@ -1,0 +1,22 @@
+pipelines:
+  AccountsPipeline:
+    source:
+      type: "BufferedStorageSourceAdapter"
+      config:
+        bucket_name: "obsrvr-stellar-ledger-data-testnet-data/landing/"
+        network: "testnet"
+        num_workers: 10
+        retry_limit: 3
+        retry_wait: 5
+        start_ledger: 2
+        end_ledger: 7000
+        ledgers_per_file: 1
+        files_per_partition: 64000
+    processors:
+      - type: "flow/processor/accounts"
+        config:
+          network_passphrase: "Test SDF Network ; September 2015"
+    consumers:
+      - type: "SaveToZeroMQ"
+        config:
+          address: "tcp://127.0.0.1:5555"

@@ -2,7 +2,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -12,6 +14,7 @@ import (
 	"path/filepath"
 	"plugin"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -20,6 +23,12 @@ import (
 
 	"github.com/withObsrvr/Flow/internal/metrics"
 	"github.com/withObsrvr/pluginapi"
+)
+
+// Global counters for basic metrics
+var (
+	globalMessageCount int64
+	globalErrorCount   int64
 )
 
 // ------------------
@@ -246,8 +255,9 @@ func BuildPipeline(name string, def PipelineDefinition, reg *PluginRegistry) (*P
 
 // CoreEngine holds pipelines and provides a production interface.
 type CoreEngine struct {
-	PluginMgr *PluginManager
-	Pipelines map[string]*Pipeline
+	PluginMgr      *PluginManager
+	Pipelines      map[string]*Pipeline
+	InstanceConfig InstanceConfig
 }
 
 // NewCoreEngine creates the engine by loading plugins and pipelines.
@@ -289,17 +299,38 @@ func (ce *CoreEngine) ProcessMessage(ctx context.Context, pipelineName string, m
 	}
 
 	// Increment source metric
-	metrics.MessagesProcessed.WithLabelValues(pipelineName, pl.Source.Name()).Inc()
+	metrics.MessagesProcessed.WithLabelValues(
+		ce.InstanceConfig.TenantID,
+		ce.InstanceConfig.InstanceID,
+		pipelineName,
+		pl.Source.Name(),
+	).Inc()
 
 	// Process through processors with better error context
 	for _, proc := range pl.Processors {
 		start := time.Now()
 		if err := proc.Process(ctx, msg); err != nil {
-			metrics.ProcessingErrors.WithLabelValues(pipelineName, proc.Name(), "process_error").Inc()
+			metrics.ProcessingErrors.WithLabelValues(
+				ce.InstanceConfig.TenantID,
+				ce.InstanceConfig.InstanceID,
+				pipelineName,
+				proc.Name(),
+				"process_error",
+			).Inc()
 			return fmt.Errorf("processor %s failed: %w", proc.Name(), err)
 		}
-		metrics.ProcessingDuration.WithLabelValues(pipelineName, proc.Name()).Observe(time.Since(start).Seconds())
-		metrics.MessagesProcessed.WithLabelValues(pipelineName, proc.Name()).Inc()
+		metrics.ProcessingDuration.WithLabelValues(
+			ce.InstanceConfig.TenantID,
+			ce.InstanceConfig.InstanceID,
+			pipelineName,
+			proc.Name(),
+		).Observe(time.Since(start).Seconds())
+		metrics.MessagesProcessed.WithLabelValues(
+			ce.InstanceConfig.TenantID,
+			ce.InstanceConfig.InstanceID,
+			pipelineName,
+			proc.Name(),
+		).Inc()
 	}
 
 	// Process through consumers
@@ -318,6 +349,19 @@ func (ce *CoreEngine) ProcessMessage(ctx context.Context, pipelineName string, m
 
 // Shutdown stops sources and closes consumers.
 func (ce *CoreEngine) Shutdown(ctx context.Context) error {
+	log.Println("Initiating graceful shutdown...")
+
+	// Report shutdown status
+	if ce.InstanceConfig.CallbackURL != "" {
+		status := map[string]interface{}{
+			"instance_id": ce.InstanceConfig.InstanceID,
+			"tenant_id":   ce.InstanceConfig.TenantID,
+			"status":      "shutting_down",
+			"timestamp":   time.Now().UTC().Format(time.RFC3339),
+		}
+		sendHeartbeat(ce.InstanceConfig, status)
+	}
+
 	var errs []error
 
 	for name, pl := range ce.Pipelines {
@@ -341,6 +385,7 @@ func (ce *CoreEngine) Shutdown(ctx context.Context) error {
 		}
 	}
 
+	log.Println("Shutdown complete")
 	if len(errs) > 0 {
 		return fmt.Errorf("shutdown errors: %v", errs)
 	}
@@ -363,11 +408,156 @@ func verifyPipeline(p *Pipeline) {
 	}
 }
 
+// Add to main.go
+type InstanceConfig struct {
+	InstanceID      string `json:"instance_id"`
+	TenantID        string `json:"tenant_id"`
+	APIKey          string `json:"api_key"`
+	CallbackURL     string `json:"callback_url"`
+	HeartbeatURL    string `json:"heartbeat_url"`
+	HeartbeatPeriod string `json:"heartbeat_period"`
+}
+
+func startHeartbeat(ctx context.Context, config InstanceConfig) {
+	ticker := time.NewTicker(30 * time.Second) // Or parse from config.HeartbeatPeriod
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			status := map[string]interface{}{
+				"instance_id": config.InstanceID,
+				"tenant_id":   config.TenantID,
+				"status":      "running",
+				"timestamp":   time.Now().UTC().Format(time.RFC3339),
+				"metrics": map[string]int64{
+					"messages_processed": atomic.LoadInt64(&globalMessageCount),
+					"errors":             atomic.LoadInt64(&globalErrorCount),
+				},
+			}
+
+			if err := sendHeartbeat(config, status); err != nil {
+				log.Printf("Failed to send heartbeat: %v", err)
+			}
+		case <-ctx.Done():
+			// Send final status before exiting
+			sendHeartbeat(config, map[string]interface{}{
+				"instance_id": config.InstanceID,
+				"tenant_id":   config.TenantID,
+				"status":      "stopped",
+				"timestamp":   time.Now().UTC().Format(time.RFC3339),
+			})
+			return
+		}
+	}
+}
+
+func sendHeartbeat(config InstanceConfig, status map[string]interface{}) error {
+	// Skip if no callback URL configured
+	if config.HeartbeatURL == "" {
+		return nil
+	}
+
+	jsonData, err := json.Marshal(status)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", config.HeartbeatURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+config.APIKey)
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("heartbeat failed with status: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// Add to CoreEngine
+type ResourceLimits struct {
+	MaxMemoryMB       int64
+	MaxCPUPercent     int
+	MaxMessagesPerSec int
+	MaxTotalMessages  int64
+}
+
+// func (ce *CoreEngine) enforceResourceLimits(limits ResourceLimits) {
+// 	// Set up monitoring and enforcement
+// 	go func() {
+// 		ticker := time.NewTicker(5 * time.Second)
+// 		defer ticker.Stop()
+
+// 		for range ticker.C {
+// 			// Check memory usage
+// 			var m runtime.MemStats
+// 			runtime.ReadMemStats(&m)
+
+// 			memoryMB := m.Alloc / 1024 / 1024
+// 			if limits.MaxMemoryMB > 0 && memoryMB > uint64(limits.MaxMemoryMB) {
+// 				log.Printf("WARNING: Memory usage exceeds limit: %d MB", memoryMB)
+// 				// Implement throttling or backpressure
+// 			}
+
+// 			// Check message rate and implement throttling if needed
+// 		}
+// 	}()
+// }
+
+func (ce *CoreEngine) startConfigWatcher(ctx context.Context) {
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// Check for configuration updates
+			updated := false
+			// err := nil
+
+			if updated {
+				log.Println("Configuration updated, reloading pipelines...")
+				// Implement hot reload of pipelines
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 func main() {
-	// Command-line flags for configuration files.
+	// Add new command-line flags
+	instanceID := flag.String("instance-id", "", "Unique ID for this pipeline instance")
+	tenantID := flag.String("tenant-id", "", "ID of the tenant who owns this pipeline")
+	apiKey := flag.String("api-key", "", "API key for authenticating with Obsrvr platform")
+	callbackURL := flag.String("callback-url", "", "URL to send status updates to")
 	pluginsDir := flag.String("plugins", "./plugins", "Directory containing plugin .so files")
 	pipelineConfigFile := flag.String("pipeline", "pipeline_example.yaml", "Path to the pipeline configuration YAML file")
 	flag.Parse()
+
+	// Validate required parameters
+	if *instanceID == "" || *tenantID == "" || *apiKey == "" {
+		log.Fatalf("instance-id, tenant-id, and api-key are required")
+	}
+
+	// Initialize instance config
+	instanceConfig := InstanceConfig{
+		InstanceID:  *instanceID,
+		TenantID:    *tenantID,
+		APIKey:      *apiKey,
+		CallbackURL: *callbackURL,
+	}
 
 	// Start Prometheus metrics endpoint first
 	metricsAddr := ":2112"
@@ -387,11 +577,17 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error initializing core engine: %v", err)
 	}
+	engine.InstanceConfig = instanceConfig
+	// Start config watcher
+	go engine.startConfigWatcher(context.Background())
 	defer engine.Shutdown(context.Background())
 
 	// Create a context with cancellation for managing pipeline lifecycles
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Start heartbeat monitoring
+	go startHeartbeat(ctx, instanceConfig)
 
 	// Start each pipeline's source
 	var wg sync.WaitGroup
@@ -402,7 +598,12 @@ func main() {
 			log.Printf("Starting pipeline: %s", name)
 
 			// Test metric
-			metrics.MessagesProcessed.WithLabelValues(name, "startup").Inc()
+			metrics.MessagesProcessed.WithLabelValues(
+				engine.InstanceConfig.TenantID,
+				engine.InstanceConfig.InstanceID,
+				name,
+				"startup",
+			).Inc()
 
 			// Start the source
 			if err := p.Source.Start(ctx); err != nil {

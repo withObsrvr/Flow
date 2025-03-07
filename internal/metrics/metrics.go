@@ -12,7 +12,7 @@ var (
 			Name: "flow_messages_processed_total",
 			Help: "The total number of processed messages",
 		},
-		[]string{"pipeline", "processor"},
+		[]string{"tenant_id", "instance_id", "pipeline", "processor"},
 	)
 
 	ProcessingDuration = promauto.NewHistogramVec(
@@ -21,7 +21,7 @@ var (
 			Help:    "Time spent processing messages",
 			Buckets: prometheus.DefBuckets,
 		},
-		[]string{"pipeline", "processor"},
+		[]string{"tenant_id", "instance_id", "pipeline", "processor"},
 	)
 
 	ProcessingErrors = promauto.NewCounterVec(
@@ -29,7 +29,7 @@ var (
 			Name: "flow_processing_errors_total",
 			Help: "The total number of processing errors",
 		},
-		[]string{"pipeline", "processor", "error_type"},
+		[]string{"tenant_id", "instance_id", "pipeline", "processor", "error_type"},
 	)
 
 	// Consumer metrics
@@ -38,7 +38,7 @@ var (
 			Name: "flow_messages_consumed_total",
 			Help: "The total number of consumed messages",
 		},
-		[]string{"pipeline", "consumer"},
+		[]string{"tenant_id", "instance_id", "pipeline", "consumer"},
 	)
 
 	// Ledger specific metrics
@@ -47,7 +47,7 @@ var (
 			Name: "flow_ledgers_processed_total",
 			Help: "The total number of ledgers processed",
 		},
-		[]string{"pipeline", "source"},
+		[]string{"tenant_id", "instance_id", "pipeline", "source"},
 	)
 
 	LedgerProcessingDuration = promauto.NewHistogramVec(
@@ -56,6 +56,6 @@ var (
 			Help:    "Time spent processing ledgers",
 			Buckets: prometheus.DefBuckets,
 		},
-		[]string{"pipeline", "source"},
+		[]string{"tenant_id", "instance_id", "pipeline", "source"},
 	)
 )
