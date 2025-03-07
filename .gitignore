@@ -31,3 +31,9 @@ flow-processor*.md
 flow-source*.md
 stellar-xdr-json.md
 
+bin/flow
+bin/graphql-api
+bin/schema-registry
+bin/query_accounts
+*.db
+

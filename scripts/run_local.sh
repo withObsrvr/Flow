@@ -9,6 +9,7 @@ PIPELINE_CONFIG="examples/pipelines/pipeline_example.yaml"
 INSTANCE_ID="local-dev"
 TENANT_ID="local"
 API_KEY="local-dev-key"
+DB_PATH=""
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -41,6 +42,10 @@ while [[ $# -gt 0 ]]; do
       GRAPHQL_API_PORT="$2"
       shift 2
       ;;
+    --db-path)
+      DB_PATH="$2"
+      shift 2
+      ;;
     *)
       echo "Unknown option: $1"
       exit 1
@@ -59,7 +64,13 @@ mkdir -p tmp
 
 # Start Schema Registry in the background
 echo "Starting Schema Registry on port $SCHEMA_REGISTRY_PORT..."
-bin/schema-registry $SCHEMA_REGISTRY_PORT &
+if [ -n "$DB_PATH" ]; then
+  # If DB_PATH is explicitly provided, use it
+  bin/schema-registry $SCHEMA_REGISTRY_PORT "$DB_PATH" &
+else
+  # Otherwise, pass the pipeline config file to extract the DB path
+  bin/schema-registry $SCHEMA_REGISTRY_PORT "$PIPELINE_CONFIG" &
+fi
 SCHEMA_PID=$!
 echo $SCHEMA_PID > tmp/schema-registry.pid
 
@@ -82,7 +93,7 @@ sleep 2
 
 # Start GraphQL API service
 echo "Starting GraphQL API on port $GRAPHQL_API_PORT..."
-bin/graphql-api $GRAPHQL_API_PORT "http://localhost:$SCHEMA_REGISTRY_PORT" &
+bin/graphql-api $GRAPHQL_API_PORT "http://localhost:$SCHEMA_REGISTRY_PORT" "$PIPELINE_CONFIG" &
 API_PID=$!
 echo $API_PID > tmp/graphql-api.pid
 

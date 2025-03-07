@@ -9,6 +9,7 @@ pipelines:
         retry_limit: 3
         retry_wait: 5
         start_ledger: 2
+        end_ledger: 3000
         ledgers_per_file: 1
         files_per_partition: 64000
     processors:
@@ -16,12 +17,10 @@ pipelines:
         config:
           network_passphrase: "Test SDF Network ; September 2015"
     consumers:
-      - type: "SaveToRedis"
-        config:
-          redis_address: "localhost:6379"
-          redis_password: ""
-          redis_db: 0
-          key_prefix: "stellar:ledger:"
       - type: "SaveToZeroMQ"
         config:
           address: "tcp://127.0.0.1:5555"
+      - type: "flow/consumer/sqlite"
+        config:
+          db_path: "flow_data_3.db"
+

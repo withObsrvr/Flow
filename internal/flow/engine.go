@@ -254,6 +254,8 @@ type CoreEngine struct {
 	PluginMgr      *PluginManager
 	Pipelines      map[string]*Pipeline
 	InstanceConfig InstanceConfig
+	ctx            context.Context
+	cancel         context.CancelFunc
 }
 
 // NewCoreEngine creates the engine by loading plugins and pipelines
@@ -280,10 +282,26 @@ func NewCoreEngine(pluginsDir, pipelineConfigFile string) (*CoreEngine, error) {
 		log.Printf("Pipeline %s built successfully", name)
 	}
 
-	return &CoreEngine{
+	// Create context for the engine
+	ctx, cancel := context.WithCancel(context.Background())
+
+	engine := &CoreEngine{
 		PluginMgr: pm,
 		Pipelines: pipelines,
-	}, nil
+		ctx:       ctx,
+		cancel:    cancel,
+	}
+
+	// Start all sources
+	for name, pipeline := range pipelines {
+		log.Printf("Starting source for pipeline: %s", name)
+		if err := pipeline.Source.Start(ctx); err != nil {
+			cancel() // Cancel context on error
+			return nil, fmt.Errorf("error starting source for pipeline %s: %w", name, err)
+		}
+	}
+
+	return engine, nil
 }
 
 // ProcessMessage routes a message through the specified pipeline
@@ -313,6 +331,11 @@ func (ce *CoreEngine) ProcessMessage(ctx context.Context, pipelineName string, m
 // Shutdown stops sources and closes consumers
 func (ce *CoreEngine) Shutdown(ctx context.Context) error {
 	log.Println("Initiating graceful shutdown...")
+
+	// Cancel the engine context
+	if ce.cancel != nil {
+		ce.cancel()
+	}
 
 	var errs []error
 
