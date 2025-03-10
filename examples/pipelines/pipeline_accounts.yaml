@@ -19,4 +19,4 @@ pipelines:
     consumers:
       - type: "flow/consumer/sqlite"
         config:
-          db_path: "flow_data_accounts_2.db"
+          db_path: "flow_data_accounts_6.db"

@@ -1,0 +1,44 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+bin/*
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Database files
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+# IDE files
+.idea/
+.vscode/
+*.sublime-*
+*.code-workspace
+
+# Logs
+*.log
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Docker files (to avoid recursion)
+Dockerfile
+docker-compose.yml
+.dockerignore 

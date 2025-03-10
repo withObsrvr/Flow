@@ -1,0 +1,24 @@
+pipelines:
+  SoroswapPipeline:
+    source:
+      type: "BufferedStorageSourceAdapter"
+      config:
+        bucket_name: "obsrvr-stellar-ledger-data-mainnet-data/landing/"
+        network: "mainnet"
+        num_workers: 10
+        retry_limit: 3
+        retry_wait: 5
+        start_ledger: 55808036
+        end_ledger: 55808038
+        ledgers_per_file: 1
+        files_per_partition: 64000
+    processors:
+      - type: "flow/processor/contract-events"
+        config:
+          network_passphrase: "Public Global Stellar Network ; September 2015"
+      - type: "flow/processor/soroswap"
+        config: {}
+    consumers:
+      - type: "flow/consumer/sqlite"
+        config:
+          db_path: "flow_soroswap_2.db" 

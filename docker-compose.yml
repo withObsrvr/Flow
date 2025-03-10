@@ -1,0 +1,73 @@
+services:
+  # Schema Registry Service
+  schema-registry:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: obsrvr/flow:latest
+    entrypoint: ["/app/bin/schema-registry"]
+    command: ["8081", "${DB_PATH:-/app/data/flow_data.db}"]
+    volumes:
+      - ./data:/app/data
+      - ${PIPELINE_DIR:-./examples/pipelines}:/app/pipelines
+      - ./healthcheck.sh:/app/healthcheck.sh
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "/app/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  # Flow Core Service
+  flow-core:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: obsrvr/flow:latest
+    depends_on:
+      schema-registry:
+        condition: service_healthy
+    entrypoint: ["/app/bin/flow"]
+    command: ["--pipeline=${PIPELINE_FILE:-/app/pipelines/pipeline_default.yaml}", "--instance-id=${INSTANCE_ID:-docker}", "--tenant-id=${TENANT_ID:-docker}", "--api-key=${API_KEY:-docker-key}", "--plugins=/app/plugins"]
+    volumes:
+      - ${PIPELINE_DIR:-./examples/pipelines}:/app/pipelines
+      - ./data:/app/data
+      - ./plugins:/app/plugins
+    environment:
+      - FLOW_DATA_DIR=/app/data
+      - PIPELINE_FILE=${PIPELINE_FILE:-/app/pipelines/pipeline_default.yaml}
+      - INSTANCE_ID=${INSTANCE_ID:-docker}
+      - TENANT_ID=${TENANT_ID:-docker}
+      - API_KEY=${API_KEY:-docker-key}
+      - DB_PATH=${DB_PATH:-/app/data/flow_data.db}
+    restart: unless-stopped
+
+  # GraphQL API Service
+  graphql-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: obsrvr/flow:latest
+    depends_on:
+      schema-registry:
+        condition: service_healthy
+    entrypoint: ["/app/bin/graphql-api"]
+    command: ["--port=8080", "--schema-registry=http://schema-registry:8081", "--pipeline-config=${PIPELINE_FILE:-/app/pipelines/pipeline_default.yaml}", "--db-path=${DB_PATH:-/app/data/flow_data.db}"]
+    volumes:
+      - ${PIPELINE_DIR:-./examples/pipelines}:/app/pipelines
+      - ./data:/app/data
+    ports:
+      - "8080:8080"
+    environment:
+      - PIPELINE_FILE=${PIPELINE_FILE:-/app/pipelines/pipeline_default.yaml}
+      - DB_PATH=${DB_PATH:-/app/data/flow_data.db}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped 
