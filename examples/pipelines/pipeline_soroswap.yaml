@@ -8,8 +8,7 @@ pipelines:
         num_workers: 10
         retry_limit: 3
         retry_wait: 5
-        start_ledger: 55808036
-        end_ledger: 55808038
+        start_ledger: 56075000
         ledgers_per_file: 1
         files_per_partition: 64000
     processors:
@@ -21,4 +20,7 @@ pipelines:
     consumers:
       - type: "flow/consumer/soroswap-sqlite"
         config:
-          db_path: "flow_data_soroswap_2.db"
+          db_path: "flow_data_soroswap_10.db"
+      - type: "SaveToZeroMQ"
+        config:
+          address: "tcp://127.0.0.1:5555"

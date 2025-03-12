@@ -360,6 +360,58 @@ func (api *GraphQLAPI) Start() error {
 	dbPath, err := api.findSQLiteConsumer()
 	if err != nil {
 		log.Printf("Warning: Failed to find SQLite consumer in pipeline config: %v", err)
+
+		// Check if this is a "not found" error
+		if appErr, ok := err.(*AppError); ok && appErr.Code == ErrNotFound {
+			log.Printf("No SQLite consumer found in pipeline config. GraphQL API will run without database access.")
+
+			// Create a minimal schema with just the health endpoint
+			queryType := graphql.NewObject(graphql.ObjectConfig{
+				Name: "Query",
+				Fields: graphql.Fields{
+					"health": &graphql.Field{
+						Type: graphql.String,
+						Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+							return "OK", nil
+						},
+						Description: "Health check endpoint",
+					},
+				},
+			})
+
+			// Create a minimal subscription type
+			subscriptionType := graphql.NewObject(graphql.ObjectConfig{
+				Name: "Subscription",
+				Fields: graphql.Fields{
+					"healthUpdates": &graphql.Field{
+						Type: graphql.String,
+						Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+							return "OK", nil
+						},
+						Description: "Health check subscription",
+					},
+				},
+			})
+
+			// Create a minimal schema
+			schemaConfig := graphql.SchemaConfig{
+				Query:        queryType,
+				Subscription: subscriptionType,
+			}
+
+			schema, err := graphql.NewSchema(schemaConfig)
+			if err != nil {
+				return fmt.Errorf("failed to create minimal schema: %w", err)
+			}
+
+			api.schema = &schema
+
+			// Start the HTTP server without database access
+			log.Printf("Starting GraphQL API on :%s", api.httpServer.Addr)
+			return api.httpServer.ListenAndServe()
+		}
+
+		// For other errors, use the default database path
 		log.Printf("Using default database path: flow_data_soroswap_2.db")
 		dbPath = "flow_data_soroswap_2.db"
 	}
@@ -425,30 +477,14 @@ func (api *GraphQLAPI) Start() error {
 	// Add metrics endpoint
 	api.httpServer.Handler.(*http.ServeMux).HandleFunc("/metrics", api.handleMetrics)
 
-	// Add schema refresh endpoint
-	api.httpServer.Handler.(*http.ServeMux).HandleFunc("/refresh-schema", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		if err := api.refreshSchema(); err != nil {
-			http.Error(w, fmt.Sprintf("Error refreshing schema: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Schema refreshed successfully"))
-	})
-
-	// Start schema refresh goroutine
+	// Start the schema refresh loop in a goroutine
 	go api.refreshSchemaLoop()
 
-	// Start database change monitoring in a separate goroutine
+	// Start the database change monitoring in a goroutine
 	go api.monitorDatabaseChanges()
 
 	// Start the HTTP server
-	log.Printf("Starting GraphQL API on %s", api.httpServer.Addr)
+	log.Printf("Starting GraphQL API on :%s", api.httpServer.Addr)
 	return api.httpServer.ListenAndServe()
 }
 

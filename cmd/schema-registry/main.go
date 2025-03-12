@@ -134,6 +134,28 @@ func (sr *SchemaRegistry) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // GenerateDynamicSchemas generates GraphQL schemas from database tables
 func (sr *SchemaRegistry) GenerateDynamicSchemas(dbPath string) error {
+	// If no database path is provided, create a minimal schema
+	if dbPath == "" {
+		log.Printf("No database path provided, creating minimal schema")
+
+		// Register a minimal type schema
+		sr.mutex.Lock()
+		sr.schemas["minimal"] = `
+type Status {
+  status: String!
+  message: String!
+  timestamp: String!
+}
+`
+		// Register a minimal query
+		sr.queries["minimal"] = `
+status: Status!
+`
+		sr.mutex.Unlock()
+
+		return nil
+	}
+
 	// Check if the database file exists
 	_, err := os.Stat(dbPath)
 	if os.IsNotExist(err) {
@@ -264,13 +286,19 @@ func (sr *SchemaRegistry) watchForDatabase(dbPath string) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
+	// Set a timeout of 30 seconds (6 attempts at 5-second intervals)
+	timeout := time.After(30 * time.Second)
+	attempts := 0
+
 	for {
 		select {
 		case <-ticker.C:
+			attempts++
+
 			// Check if the database file exists now
 			_, err := os.Stat(dbPath)
 			if os.IsNotExist(err) {
-				log.Printf("Database file %s still does not exist, waiting...", dbPath)
+				log.Printf("Database file %s still does not exist, waiting... (attempt %d/6)", dbPath, attempts)
 				continue
 			} else if err != nil {
 				log.Printf("Error checking database file: %v", err)
@@ -286,6 +314,27 @@ func (sr *SchemaRegistry) watchForDatabase(dbPath string) {
 
 			// Success, stop watching
 			log.Printf("Successfully generated schemas from database %s", dbPath)
+			return
+
+		case <-timeout:
+			// Timeout reached, create a minimal schema and stop watching
+			log.Printf("Timeout reached waiting for database file %s, creating minimal schema", dbPath)
+
+			// Register a minimal type schema
+			sr.mutex.Lock()
+			sr.schemas["minimal"] = `
+type Status {
+  status: String!
+  message: String!
+  timestamp: String!
+}
+`
+			// Register a minimal query
+			sr.queries["minimal"] = `
+status: Status!
+`
+			sr.mutex.Unlock()
+
 			return
 		}
 	}
@@ -372,10 +421,12 @@ func findDatabasePathInConfig(pipelineConfigFile string) (string, error) {
 	}
 
 	// Look for a SQLite consumer in any pipeline
+	var hasSqliteConsumer bool
 	for pipelineName, pipeline := range config.Pipelines {
 		for _, consumer := range pipeline.Consumers {
 			// Check if this is a SQLite consumer
 			if strings.Contains(strings.ToLower(consumer.Type), "sqlite") {
+				hasSqliteConsumer = true
 				log.Printf("Found SQLite consumer in pipeline %s", pipelineName)
 
 				// Get the database path from the consumer config
@@ -387,7 +438,12 @@ func findDatabasePathInConfig(pipelineConfigFile string) (string, error) {
 		}
 	}
 
-	// Default to flow_data.db if no SQLite consumer found
+	// If no SQLite consumer was found at all, return a special error
+	if !hasSqliteConsumer {
+		return "", fmt.Errorf("no_sqlite_consumer: Pipeline does not contain any SQLite consumers")
+	}
+
+	// Default to flow_data.db if SQLite consumer found but no path specified
 	return "flow_data.db", nil
 }
 
@@ -413,9 +469,14 @@ func main() {
 			// Extract the database path from the pipeline config
 			extractedPath, err := findDatabasePathInConfig(pipelineConfigFile)
 			if err != nil {
-				log.Printf("Warning: Failed to extract database path from config: %v", err)
-				log.Printf("Using default database path: flow_data.db")
-				dbPath = "flow_data.db"
+				if strings.HasPrefix(err.Error(), "no_sqlite_consumer:") {
+					log.Printf("No SQLite consumers found in pipeline config. Schema Registry will run with minimal schema.")
+					dbPath = ""
+				} else {
+					log.Printf("Warning: Failed to extract database path from config: %v", err)
+					log.Printf("Using default database path: flow_data.db")
+					dbPath = "flow_data.db"
+				}
 			} else {
 				dbPath = extractedPath
 			}

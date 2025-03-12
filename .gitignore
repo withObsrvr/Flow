@@ -29,6 +29,7 @@ cdp-pipeline-workflow.md
 flow-consumer*.md
 flow-processor*.md
 flow-source*.md
+flow-soroswap*.md
 stellar-xdr-json.md
 
 bin/flow
@@ -36,4 +37,5 @@ bin/graphql-api
 bin/schema-registry
 bin/query_accounts
 *.db
-
+*.db-wal
+*.db-shm
