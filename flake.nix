@@ -17,7 +17,8 @@
             pname = "flow";
             version = "0.1.0";
             src = ./.;
-            vendorHash = null; # Let Nix calculate this, then fill it in
+            vendorHash = null; # Use the vendor directory
+            proxyVendor = true; # Use the vendor directory
           };
         };
 
