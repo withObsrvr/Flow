@@ -17,7 +17,7 @@
             pname = "flow";
             version = "0.1.0";
             src = ./.;
-            vendorSha256 = null; # Let Nix calculate this, then fill it in
+            vendorHash = null; # Let Nix calculate this, then fill it in
           };
         };
 
