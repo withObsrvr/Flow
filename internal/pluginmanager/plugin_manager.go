@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"github.com/withObsrvr/pluginapi"
 	"path/filepath"
 )
 
