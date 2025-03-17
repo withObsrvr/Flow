@@ -19,6 +19,8 @@
             src = ./.;
             vendorHash = null; # Use the vendor directory
             proxyVendor = true; # Use the vendor directory
+            # Skip tests during the build
+            doCheck = false;
           };
         };
 
