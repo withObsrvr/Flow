@@ -16,19 +16,22 @@ This repository is organized as a monorepo containing multiple components:
   /internal             # Internal packages
     /flow              # Core Flow engine code
     /metrics           # Metrics collection
+    /pluginmanager     # Plugin loading and management
   
   /pkg                  # Public packages
     /pluginapi         # Plugin API interfaces
     /schemaapi         # Schema API interfaces
     /common            # Shared utilities
   
-  /plugins              # Plugin .so files
+  /plugins              # Plugin .so and .wasm files
   
   /scripts              # Utility scripts
     run_local.sh       # Script to run all components locally
+    test_wasm_plugin.sh # Script to test WASM plugin functionality
   
   /examples             # Example configurations
     /pipelines         # Example pipeline configurations
+    /wasm-plugin-sample # Sample WASM plugin implementation
 ```
 
 ## Components
@@ -44,6 +47,15 @@ The Schema Registry service collects GraphQL schema definitions from plugins and
 ### GraphQL API
 
 The GraphQL API service provides a query interface to access data processed by Flow pipelines.
+
+## Plugin Support
+
+Flow supports two types of plugins:
+
+1. **Native Go Plugins** (.so files): Traditional Go plugins compiled as shared libraries.
+2. **WebAssembly (WASM) Plugins** (.wasm files): Portable plugins that run in a sandboxed environment with improved security and cross-platform compatibility.
+
+See [Plugin Support Documentation](docs/plugin_support.md) for details on creating and using both types of plugins.
 
 ## Running Locally
 
@@ -64,7 +76,19 @@ Options:
 
 ## Creating Plugins
 
-Plugins are Go libraries compiled as shared objects (.so files) that implement the plugin API interfaces.
+Plugins can be created in two formats:
+
+### Native Go Plugins
+
+```bash
+go build -buildmode=plugin -o myplugin.so
+```
+
+### WASM Plugins
+
+```bash
+tinygo build -o myplugin.wasm -target=wasi ./main.go
+```
 
 A plugin can be a:
 - **Source**: Fetches data from an external system
@@ -86,10 +110,12 @@ pipelines:
         # Source configuration
     processors:
       - type: "MyProcessor"
+        plugin: "./plugins/my-processor.so"  # or ".wasm" for WASM plugins
         config:
           # Processor configuration
     consumers:
       - type: "MyConsumer"
+        plugin: "./plugins/my-consumer.wasm"  # WASM consumer example
         config:
           # Consumer configuration
 ```
