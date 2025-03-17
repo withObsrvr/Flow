@@ -1,5 +1,5 @@
 pipelines:
-  KaleMetricsPipeline:
+  SoroswapPipeline:
     source:
       type: "BufferedStorageSourceAdapter"
       config:
@@ -8,17 +8,14 @@ pipelines:
         num_workers: 10
         retry_limit: 3
         retry_wait: 5
-        start_ledger: 56137394
+        start_ledger: 56146570
         ledgers_per_file: 1
         files_per_partition: 64000
     processors:
-      - type: "flow/processor/contract-invocations"
+      - type: "flow/processor/latest-ledger"
         config:
           network_passphrase: "Public Global Stellar Network ; September 2015"
-      - type: "flow/processor/kale-metrics"
-        config:
-          contract_id: "CDL74RF5BLYR2YBLCCI7F5FB6TPSCLKEJUBSD2RSVWZ4YHF3VMFAIGWA"
     consumers:
       - type: "SaveToZeroMQ"
         config:
-          address: "tcp://127.0.0.1:5555"
+          address: "tcp://127.0.0.1:5556"

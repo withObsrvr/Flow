@@ -1,3 +1,10 @@
 Flow
 docs/
 plugins/
+bin/
+*.db-wal
+*.db-shm
+*.db
+*.db-wal
+*.db-shm
+data/

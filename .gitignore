@@ -20,6 +20,7 @@
 # Go workspace file
 go.work
 go.work.sum
+*.secret.yaml
 
 # env file
 .env
@@ -31,6 +32,9 @@ flow-processor*.md
 flow-source*.md
 flow-soroswap*.md
 stellar-xdr-json.md
+flow.md
+flow_upgraded_implementation_plan.md
+flow-engine.md
 
 bin/flow
 bin/graphql-api
@@ -39,3 +43,9 @@ bin/query_accounts
 *.db
 *.db-wal
 *.db-shm
+
+# Nix
+result
+result-*
+.direnv/
+.envrc
