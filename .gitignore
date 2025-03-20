@@ -51,3 +51,4 @@ result
 result-*
 .direnv/
 .envrc
+vendor/
