@@ -1,0 +1,167 @@
+name: Build and Release Flow with Plugins
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (e.g., v0.1.0)'
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout flow
+        uses: actions/checkout@v4
+        with:
+          path: flow
+
+      - name: Checkout flow-consumer-sqlite
+        uses: actions/checkout@v4
+        with:
+          repository: withObsrvr/flow-consumer-sqlite
+          path: flow-consumer-sqlite
+          
+      - name: Checkout flow-processor-latestledger
+        uses: actions/checkout@v4
+        with:
+          repository: withObsrvr/flow-processor-latestledger
+          path: flow-processor-latestledger
+
+      - name: Checkout flow-source-bufferedstorage-gcs
+        uses: actions/checkout@v4
+        with:
+          repository: withObsrvr/flow-source-bufferedstorage-gcs
+          path: flow-source-bufferedstorage-gcs
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v25
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Configure Nix Substituters
+        run: |
+          mkdir -p ~/.config/nix
+          echo 'substituters = https://cache.nixos.org/' > ~/.config/nix/nix.conf
+          echo 'trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=' >> ~/.config/nix/nix.conf
+          echo 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
+
+      - name: Build Flow
+        run: |
+          cd flow
+          nix build
+          mkdir -p ../dist/bin
+          cp -r result/bin/* ../dist/bin/
+          
+          # Store Go version for documentation
+          go_version=$(nix shell nixpkgs#go_1_23 -c go version)
+          echo "$go_version" > ../dist/GO_VERSION.txt
+
+      - name: Build flow-consumer-sqlite
+        run: |
+          cd flow-consumer-sqlite
+          nix build
+          mkdir -p ../dist/plugins
+          cp result/lib/* ../dist/plugins/
+
+      - name: Build flow-processor-latestledger
+        run: |
+          cd flow-processor-latestledger
+          nix build
+          cp result/lib/* ../dist/plugins/
+
+      - name: Build flow-source-bufferedstorage-gcs
+        run: |
+          cd flow-source-bufferedstorage-gcs
+          nix build
+          cp result/lib/* ../dist/plugins/
+          
+      - name: Generate checksums
+        run: |
+          cd dist
+          # Generate SHA256 checksums for all files
+          find . -type f -not -name "SHA256SUMS" | sort | xargs sha256sum > SHA256SUMS
+
+      - name: Generate documentation
+        run: |
+          cat > dist/README.md << EOF
+          # Flow with Plugins Release
+          
+          This release contains the Flow application and its plugins, all built with the same Go toolchain to ensure compatibility.
+          
+          ## Build Information
+          
+          $(cat dist/GO_VERSION.txt)
+          
+          ## Components
+          
+          - Flow executables in \`bin/\` directory
+          - Plugins in \`plugins/\` directory
+          
+          ## Installation
+          
+          1. Copy the Flow executables to your preferred location
+          2. Copy the plugins to your Flow plugins directory
+          3. Configure Flow to load these plugins
+          
+          ## Compatibility
+          
+          These plugins are only compatible with the Flow binary included in this release (or built with the same Go toolchain) due to Go plugin linking requirements.
+          
+          ## Verification
+          
+          Verify the integrity of your downloads using the provided SHA256SUMS file:
+          ```
+          sha256sum -c SHA256SUMS
+          ```
+          EOF
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.release_tag || github.ref_name }}
+          name: Flow Release ${{ github.event.inputs.release_tag || github.ref_name }}
+          draft: true
+          generate_release_notes: true
+          files: |
+            dist/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-docker:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Download release assets
+        uses: robinraju/release-downloader@v1.9
+        with:
+          tag: ${{ github.event.inputs.release_tag || github.ref_name }}
+          zipBall: false
+          tarBall: false
+          out-file-path: "dist"
+          
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            withobsrvr/flow:latest
+            withobsrvr/flow:${{ github.event.inputs.release_tag || github.ref_name }} 
