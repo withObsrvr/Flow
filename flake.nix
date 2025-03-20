@@ -19,8 +19,21 @@
             src = ./.;
             # Use the actual hash value provided by the build process
             vendorHash = "sha256-HbDWADDLpN7TPu3i0RqaOwBQgRkGP7rHp9T7IylsgwQ=";
-            # Use -mod=mod to download modules directly from network
+            
+            # More explicitly handle vendoring issues
+            preBuild = ''
+              # Remove any existing vendor directory
+              rm -rf vendor
+              
+            
+            '';
+            
+            # Set flags to explicitly use modules instead of vendor
             buildFlags = ["-mod=mod"];
+            
+            # Ensure these env vars are set during builds
+            GOFLAGS = "-mod=mod";
+            
             # Specify the main packages to build
             subPackages = [ 
               "cmd/flow" 
@@ -34,6 +47,10 @@
           buildInputs = [ 
             pkgs.go_1_23
           ];
+          # Set environment variables in the development shell too
+          shellHook = ''
+            export GOFLAGS="-mod=mod"
+          '';
         };
       }
     );
