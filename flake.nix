@@ -28,6 +28,11 @@
               GO111MODULE = "on";
               GOSUMDB = "sum.golang.org";
             };
+            # Add a pre-build step to remove the vendor directory
+            preBuild = ''
+              echo "Removing vendor directory to avoid conflicts..."
+              rm -rf vendor/
+            '';
             # Specify the main packages to build
             subPackages = [ 
               "cmd/flow" 
