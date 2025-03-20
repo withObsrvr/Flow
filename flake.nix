@@ -4,31 +4,25 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    gomod2nix.url = "github:tweag/gomod2nix";
+    gomod2nix.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils, gomod2nix }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ gomod2nix.overlays.default ];
+        };
       in
       {
         packages = {
-          default = pkgs.buildGoModule {
+          default = pkgs.buildGoApplication {
             pname = "flow";
             version = "0.1.0";
             src = ./.;
-            # Use the actual hash value provided by the build process
-            vendorHash = "sha256-HbDWADDLpN7TPu3i0RqaOwBQgRkGP7rHp9T7IylsgwQ=";
-            
-            
-            
-            # Set flags to explicitly use modules instead of vendor
-            buildFlags = ["-mod=mod"];
-            
-            # Ensure these env vars are set during builds
-            GOFLAGS = "-mod=mod";
-            
-            # Specify the main packages to build
+            modules = ./gomod2nix.toml;
             subPackages = [ 
               "cmd/flow" 
               "cmd/graphql-api"
@@ -37,13 +31,20 @@
           };
         };
 
+        # Required utility to generate gomod2nix.toml
+        apps.gomod2nix = {
+          type = "app";
+          program = "${gomod2nix.packages.${system}.default}/bin/gomod2nix";
+        };
+
         devShell = pkgs.mkShell {
           buildInputs = [ 
             pkgs.go_1_23
+            gomod2nix.packages.${system}.default
           ];
-          # Set environment variables in the development shell too
+          # Helper script to generate gomod2nix.toml
           shellHook = ''
-            export GOFLAGS="-mod=mod"
+            echo "Use 'gomod2nix' to generate/update the gomod2nix.toml file"
           '';
         };
       }
