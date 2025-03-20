@@ -1,5 +1,5 @@
 {
-  description = "Stellar Flow Data Pipeline";
+  description = "Obsrvr Flow Data Indexer";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -30,10 +30,16 @@
             pname = "flow";
             version = "0.1.0";
             src = ./.;
-            vendorHash = null; # Use the vendor directory
-            proxyVendor = true; # Use the vendor directory
-            # Skip tests during the build
-            doCheck = false;
+            # Use the actual hash value provided by the build process
+            vendorHash = "sha256-HbDWADDLpN7TPu3i0RqaOwBQgRkGP7rHp9T7IylsgwQ=";
+            # Use -mod=mod to download modules directly from network
+            buildFlags = ["-mod=mod"];
+            # Specify the main packages to build
+            subPackages = [ 
+              "cmd/flow" 
+              "cmd/graphql-api"
+              "cmd/schema-registry"
+            ];
           };
           
           # Example WASM plugin (for demonstration purposes)
