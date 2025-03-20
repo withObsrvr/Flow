@@ -20,13 +20,7 @@
             # Use the actual hash value provided by the build process
             vendorHash = "sha256-HbDWADDLpN7TPu3i0RqaOwBQgRkGP7rHp9T7IylsgwQ=";
             
-            # More explicitly handle vendoring issues
-            preBuild = ''
-              # Remove any existing vendor directory
-              rm -rf vendor
-              
             
-            '';
             
             # Set flags to explicitly use modules instead of vendor
             buildFlags = ["-mod=mod"];
