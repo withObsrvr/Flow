@@ -1,54 +1,27 @@
-FROM golang:1.23.4 AS builder
+FROM alpine:3.19
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y git build-essential
+# Install dependencies
+RUN apk add --no-cache ca-certificates libc6-compat
 
-# Set working directory
-WORKDIR /app
+# Create app directories
+RUN mkdir -p /app/bin /app/plugins /app/config
 
-# Copy go.mod and go.sum files
-COPY go.mod go.sum ./
+# Copy binaries
+COPY dist/bin/* /app/bin/
+COPY dist/plugins/* /app/plugins/
 
-# Download dependencies
-RUN go mod download
-
-# Copy the source code
-COPY . .
-
-# Build the binaries
-RUN go build -buildmode=pie -o bin/flow cmd/flow/main.go
-RUN go build -buildmode=pie -o bin/schema-registry cmd/schema-registry/main.go
-RUN go build -buildmode=pie -o bin/graphql-api cmd/graphql-api/main.go
-
-# Create a smaller runtime image
-FROM ubuntu:22.04
-
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y ca-certificates sqlite3 curl netcat-openbsd && rm -rf /var/lib/apt/lists/*
-
-# Set working directory
-WORKDIR /app
-
-# Copy binaries from builder stage
-COPY --from=builder /app/bin /app/bin
-
-# Copy plugins directory
-COPY --from=builder /app/plugins /app/plugins
-
-# Copy examples directory
-COPY --from=builder /app/examples /app/examples
-
-# Create a directory for data
-RUN mkdir -p /app/data
+# Copy documentation
+COPY dist/README.md /app/
+COPY dist/SHA256SUMS /app/
 
 # Set environment variables
 ENV PATH="/app/bin:${PATH}"
+ENV FLOW_PLUGINS_DIR="/app/plugins"
+ENV FLOW_CONFIG_DIR="/app/config"
 
-# Expose ports
-EXPOSE 8080 8081
+# Set working directory
+WORKDIR /app
 
-# Set entrypoint
+# Set the entrypoint
 ENTRYPOINT ["/app/bin/flow"]
-
-# Default command
 CMD ["--help"] 
