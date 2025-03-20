@@ -3,12 +3,12 @@ pipelines:
     source:
       type: "BufferedStorageSourceAdapter"
       config:
-        bucket_name: "obsrvr-stellar-ledger-data-testnet-data/landing/"
+        bucket_name: "obsrvr-stellar-ledger-data-testnet-data/landing/ledgers"
         network: "testnet"
         num_workers: 10
         retry_limit: 3
         retry_wait: 5
-        start_ledger: 2
+        start_ledger: 3
         end_ledger: 3000
         ledgers_per_file: 1
         files_per_partition: 64000
