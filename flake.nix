@@ -10,28 +10,41 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        
+        # Custom source that explicitly excludes the vendor directory
+        flowSrc = pkgs.lib.cleanSourceWith {
+          src = ./.;
+          filter = path: type:
+            let baseName = baseNameOf path;
+            in !(baseName == "vendor");
+        };
       in
       {
         packages = {
           default = pkgs.buildGoModule {
             pname = "flow";
             version = "0.1.0";
-            src = ./.;
+            src = flowSrc;
             # Set vendorHash to null to disable vendoring and fetch dependencies from the network
             vendorHash = null;
-            # Ensure proper Go module proxy configuration
-            proxyVendor = false; # Don't use the built-in proxy behavior
-            flags = [ "-mod=mod" ];
+            # Don't try to use the vendor directory at all
+            proxyVendor = false;
+            allowGoReference = true;
+            # Use these flags to ensure we don't use the vendor directory
+            buildFlags = [ "-mod=mod" ];
             # Set environment variables for go module downloads
             env = {
               GOPROXY = "https://proxy.golang.org,direct";
               GO111MODULE = "on";
               GOSUMDB = "sum.golang.org";
             };
-            # Add a pre-build step to remove the vendor directory
+            # Additional pre-build checks to make sure the vendor directory is gone
             preBuild = ''
-              echo "Removing vendor directory to avoid conflicts..."
-              rm -rf vendor/
+              if [ -d vendor ]; then
+                echo "ERROR: vendor directory still exists!"
+                exit 1
+              fi
+              echo "Building without vendor directory..."
             '';
             # Specify the main packages to build
             subPackages = [ 
