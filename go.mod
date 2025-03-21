@@ -1,6 +1,6 @@
-module github.com/withObsrvr/Flow
+module github.com/withObsrvr/flow
 
-go 1.23.4
+go 1.19
 
 require (
 	github.com/gorilla/websocket v1.5.3
@@ -9,7 +9,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/prometheus/client_golang v1.21.1
 	github.com/stretchr/testify v1.10.0
-	github.com/tetratelabs/wazero v1.6.0
+	github.com/tetratelabs/wazero v1.3.1
 	github.com/withObsrvr/pluginapi v0.0.0-20250303141549-e645e333195c
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1

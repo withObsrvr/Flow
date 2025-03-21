@@ -1,21 +1,13 @@
-# Flow Pipeline System with WebAssembly Support
+# Flow Pipeline with WebAssembly Support Example
 
-This enhanced version of the Flow pipeline system supports both traditional Go plugins and WebAssembly modules as processors, allowing for more flexible and portable deployment options.
+This example demonstrates how to use both traditional Go plugins and WebAssembly modules as processors in a pipeline system.
 
 ## Overview
 
-The Flow pipeline system processes events from sources through a series of processors and sends the results to consumers. The system is configured using YAML files and supports two types of processors:
+The Flow pipeline system processes events from sources through a series of processors and sends the results to consumers. This example shows how to support both processor types:
 
 1. **Go Plugins** - Traditional Go plugins loaded dynamically at runtime
 2. **WebAssembly Modules** - WASM modules for cross-platform compatibility and enhanced security
-
-## Features
-
-- Configuration-based pipeline definition in YAML
-- Support for both Go plugins and WebAssembly processors
-- Common processor interface for consistent event handling
-- Dynamic loading of processors at runtime
-- Flexible configuration options for processors
 
 ## Directory Structure
 
@@ -28,46 +20,42 @@ The Flow pipeline system processes events from sources through a series of proce
 │   ├── interface.go        # Common processor interface
 │   └── registry.go         # Registry for loading and retrieving processors
 ├── processors/             # Actual processor implementations
-│   ├── go/                 # Go plugin processors
 │   └── wasm/               # WebAssembly processors
 │       ├── example.go      # Example WebAssembly processor
 │       └── Makefile        # For building WebAssembly modules
-├── example_main.go         # Example application using the pipeline system
+├── main.go                 # Main application
 └── example_pipeline.yaml   # Example pipeline configuration
 ```
 
-## Getting Started
+## Building and Running
 
 ### Prerequisites
 
 - Go 1.16 or later
-- TinyGo or standard Go with WASM support for building WebAssembly modules
+- Standard Go or TinyGo with WebAssembly support
 
-### Building WebAssembly Processors
+### Building the WebAssembly Processor
 
 1. Navigate to the WebAssembly processor directory:
    ```
    cd processors/wasm
    ```
 
-2. Build the WebAssembly module:
+2. Build the WebAssembly module using the Makefile:
    ```
    make
    ```
 
-This will create a `.wasm` file that can be used in your pipeline configuration.
-
 ### Running the Example
 
-1. Update the `example_pipeline.yaml` file with your specific configuration
-2. Run the example application:
+1. Build and run the main application:
    ```
-   go run example_main.go
+   go run main.go
    ```
 
 ## Pipeline Configuration
 
-A pipeline is defined in YAML format. Here's an example configuration:
+Pipelines are defined in YAML format. Here's an example configuration:
 
 ```yaml
 pipelines:
@@ -84,12 +72,19 @@ pipelines:
         config:
           include_failed: false
           
-      # WebAssembly processor
+      # WebAssembly processor using runtime specification
       - type: data/enrichment
         runtime: wasm
         path: processors/wasm/example.wasm
         config:
           example_value: "test-value"
+          
+      # WebAssembly processor using type prefix
+      - type: wasm/filter
+        path: processors/wasm/filter.wasm
+        config:
+          filter_field: "type"
+          filter_value: "payment"
 
     consumers:
       - type: sqlite
@@ -98,35 +93,7 @@ pipelines:
           table_name: "latest_ledger_transactions"
 ```
 
-### Processor Types
-
-There are two ways to specify a WebAssembly processor:
-
-1. Using the `runtime` field:
-   ```yaml
-   - type: data/enrichment
-     runtime: wasm
-     path: processors/wasm/example.wasm
-     config:
-       example_value: "test-value"
-   ```
-
-2. Using the `wasm/` prefix in the type:
-   ```yaml
-   - type: wasm/filter
-     path: processors/wasm/filter.wasm
-     config:
-       filter_field: "type"
-       filter_value: "payment"
-   ```
-
 ## Creating Custom Processors
-
-### Go Plugin Processor
-
-1. Create a new Go plugin that implements the processor interface
-2. Build it as a plugin with `go build -buildmode=plugin`
-3. Place the `.so` file in your plugins directory
 
 ### WebAssembly Processor
 
@@ -138,12 +105,35 @@ There are two ways to specify a WebAssembly processor:
    - `metadata` for returning processor information
 
 2. Build it to WebAssembly:
-   ```
+   ```bash
    GOOS=js GOARCH=wasm go build -o myprocessor.wasm myprocessor.go
    ```
 
-3. Reference it in your pipeline configuration
+3. Reference it in your pipeline configuration.
+
+## How It Works
+
+1. The pipeline configuration is loaded from a YAML file.
+2. The processor registry manages both Go plugins and WebAssembly modules.
+3. When loading processors, the system determines the type (Go plugin or WebAssembly) based on the configuration.
+4. Processors are initialized with their configuration.
+5. The pipeline executes, sending events through each processor in sequence.
+6. Results are sent to consumers.
+
+## Benefits of WebAssembly Support
+
+- **Cross-platform compatibility**: WebAssembly modules can be run on any platform.
+- **Enhanced security**: WebAssembly runs in a sandboxed environment.
+- **Language flexibility**: Processors can be written in any language that compiles to WebAssembly.
+- **Smaller deployment size**: WebAssembly modules are typically smaller than equivalent Go plugins.
+- **Isolation**: WebAssembly modules run in isolation, reducing the risk of one processor affecting others.
+
+## Limitations
+
+- **Performance**: WebAssembly may be slower than native Go code for some operations.
+- **Memory management**: WebAssembly requires more explicit memory management.
+- **Feature access**: WebAssembly has limited access to system resources compared to Go plugins.
 
 ## License
 
-MIT
+MIT 

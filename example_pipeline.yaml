@@ -1,0 +1,33 @@
+pipelines:
+  latest_ledger:
+    source:
+      type: stellar/latest_ledger
+      config:
+        horizon_url: "https://horizon.stellar.org"
+        poll_interval: 5
+
+    processors:
+      # Traditional Go plugin processor
+      - type: stellar/transaction_extractor
+        config:
+          include_failed: false
+          
+      # WebAssembly processor using runtime specification
+      - type: data/enrichment
+        runtime: wasm
+        path: processors/wasm/example.wasm
+        config:
+          example_value: "test-value"
+          
+      # WebAssembly processor using type prefix
+      - type: wasm/filter
+        path: processors/wasm/filter.wasm
+        config:
+          filter_field: "type"
+          filter_value: "payment"
+
+    consumers:
+      - type: sqlite
+        config:
+          db_path: "/tmp/flow-latest-ledger.db"
+          table_name: "latest_ledger_transactions" 
