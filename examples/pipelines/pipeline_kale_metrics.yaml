@@ -8,7 +8,8 @@ pipelines:
         num_workers: 10
         retry_limit: 3
         retry_wait: 5
-        start_ledger: 56137394
+        start_ledger: 56284374
+        end_ledger: 56284375
         ledgers_per_file: 1
         files_per_partition: 64000
     processors:
