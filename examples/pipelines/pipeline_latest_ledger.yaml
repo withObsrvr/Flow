@@ -9,6 +9,7 @@ pipelines:
         retry_limit: 3
         retry_wait: 5
         start_ledger: 56301562
+        end_ledger: 56301563
         ledgers_per_file: 1
         files_per_partition: 64000
     processors:

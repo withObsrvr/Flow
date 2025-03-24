@@ -57,6 +57,7 @@ func NewAPIServer(engine *CoreEngine, port int, authEnabled bool, username, pass
 
 // Start initializes and starts the API server
 func (a *APIServer) Start(ctx context.Context) error {
+	log.Printf("DEBUG: Inside APIServer.Start method, port: %d", a.port)
 	mux := http.NewServeMux()
 
 	// Register API endpoints
@@ -65,18 +66,21 @@ func (a *APIServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/pipelines/stop", a.authMiddleware(a.handleStopPipeline))
 	mux.HandleFunc("/api/metrics", a.authMiddleware(a.handleGetMetrics))
 	mux.HandleFunc("/api/health", a.handleHealthCheck)
+	log.Printf("DEBUG: Registered API endpoints")
 
 	// Create HTTP server
 	a.server = &http.Server{
 		Addr:    fmt.Sprintf(":%d", a.port),
 		Handler: mux,
 	}
+	log.Printf("DEBUG: Created HTTP server with address %s", a.server.Addr)
 
 	// Set start time
 	a.startTime = time.Now()
 
 	// Initialize pipeline status map
 	a.initPipelineStatus()
+	log.Printf("DEBUG: Initialized pipeline status map")
 
 	// Start the server in a separate goroutine
 	go func() {
@@ -85,6 +89,7 @@ func (a *APIServer) Start(ctx context.Context) error {
 			log.Printf("API server error: %v", err)
 		}
 	}()
+	log.Printf("DEBUG: API server goroutine started")
 
 	return nil
 }

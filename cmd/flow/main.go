@@ -94,10 +94,16 @@ func main() {
 
 	// Start the API server if enabled
 	if *enableAPI {
+		log.Printf("DEBUG: enableAPI flag is set to true, attempting to start API server on port %d", *apiPort)
+		log.Printf("DEBUG: API auth is enabled: %v, username: %s", apiAuthEnabled, apiUsername)
 		log.Printf("Starting management API server on port %d", *apiPort)
 		if err := engine.StartAPIServer(ctx, *apiPort, apiAuthEnabled, apiUsername, apiPassword); err != nil {
 			log.Printf("Warning: Failed to start API server: %v", err)
+		} else {
+			log.Printf("DEBUG: API server started successfully on port %d", *apiPort)
 		}
+	} else {
+		log.Printf("DEBUG: API server not enabled (--api flag not set)")
 	}
 
 	// Start config watcher
