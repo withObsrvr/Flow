@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -23,7 +24,29 @@ func main() {
 	pluginsDir := flag.String("plugins", "./plugins", "Directory containing plugin .so files")
 	pipelineConfigFile := flag.String("pipeline", "pipeline_example.yaml", "Path to the pipeline configuration YAML file")
 	schemaRegistryURL := flag.String("schema-registry", "http://localhost:8081", "URL of the schema registry service")
+
+	// API server flags
+	enableAPI := flag.Bool("api", false, "Enable the management API server")
+	apiPort := flag.Int("api-port", 8080, "Port for the API server")
+
 	flag.Parse()
+
+	// Check for environment variables
+	apiUsername := os.Getenv("FLOW_API_USERNAME")
+	apiPassword := os.Getenv("FLOW_API_PASSWORD")
+	apiAuthEnabled := true
+
+	// Check if auth is explicitly disabled
+	if authEnv := os.Getenv("FLOW_API_AUTH_ENABLED"); authEnv == "false" {
+		apiAuthEnabled = false
+	}
+
+	// Override API port from environment if provided
+	if portEnv := os.Getenv("FLOW_API_PORT"); portEnv != "" {
+		if port, err := strconv.Atoi(portEnv); err == nil {
+			*apiPort = port
+		}
+	}
 
 	// Validate required parameters
 	if *instanceID == "" || *tenantID == "" || *apiKey == "" {
@@ -69,6 +92,14 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Start the API server if enabled
+	if *enableAPI {
+		log.Printf("Starting management API server on port %d", *apiPort)
+		if err := engine.StartAPIServer(ctx, *apiPort, apiAuthEnabled, apiUsername, apiPassword); err != nil {
+			log.Printf("Warning: Failed to start API server: %v", err)
+		}
+	}
+
 	// Start config watcher
 	go engine.StartConfigWatcher(ctx)
 
@@ -83,6 +114,13 @@ func main() {
 	// Perform graceful shutdown
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
+
+	// Shutdown the API server if it was started
+	if *enableAPI {
+		if err := engine.ShutdownAPIServer(shutdownCtx); err != nil {
+			log.Printf("Error shutting down API server: %v", err)
+		}
+	}
 
 	if err := engine.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("Error during shutdown: %v", err)

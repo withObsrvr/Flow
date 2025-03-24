@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"plugin"
+	"sync"
 	"time"
 
 	"github.com/withObsrvr/Flow/pkg/schemaapi"
@@ -256,6 +257,14 @@ type CoreEngine struct {
 	InstanceConfig InstanceConfig
 	ctx            context.Context
 	cancel         context.CancelFunc
+	apiServer      *APIServer
+	pipelineStatus map[string]struct {
+		State         string
+		CurrentLedger int64
+		StartTime     time.Time
+		LastError     string
+	}
+	statusMutex sync.RWMutex
 }
 
 // NewCoreEngine creates the engine by loading plugins and pipelines
@@ -290,6 +299,12 @@ func NewCoreEngine(pluginsDir, pipelineConfigFile string) (*CoreEngine, error) {
 		Pipelines: pipelines,
 		ctx:       ctx,
 		cancel:    cancel,
+		pipelineStatus: make(map[string]struct {
+			State         string
+			CurrentLedger int64
+			StartTime     time.Time
+			LastError     string
+		}),
 	}
 
 	// Start all sources
@@ -447,5 +462,188 @@ func registerPluginSchema(pluginName string, provider schemaapi.SchemaProvider, 
 	}
 
 	log.Printf("Successfully registered schema for plugin: %s", pluginName)
+	return nil
+}
+
+// StartPipeline starts a pipeline by its ID with optional configuration overrides
+func (ce *CoreEngine) StartPipeline(pipelineID string, overrides map[string]interface{}) error {
+	ce.statusMutex.Lock()
+	defer ce.statusMutex.Unlock()
+
+	pipeline, exists := ce.Pipelines[pipelineID]
+	if !exists {
+		return fmt.Errorf("pipeline %s not found", pipelineID)
+	}
+
+	// Apply overrides if provided
+	if len(overrides) > 0 {
+		// This would be where configuration overrides are applied
+		log.Printf("Applying overrides to pipeline %s: %v", pipelineID, overrides)
+		// Implementation depends on the specific fields that can be overridden
+	}
+
+	// Start the source, which should then trigger the pipeline
+	if src, ok := pipeline.Source.(interface{ Start(context.Context) error }); ok {
+		if err := src.Start(ce.ctx); err != nil {
+			ce.pipelineStatus[pipelineID] = struct {
+				State         string
+				CurrentLedger int64
+				StartTime     time.Time
+				LastError     string
+			}{
+				State:     "error",
+				StartTime: time.Now(),
+				LastError: err.Error(),
+			}
+
+			// Update API server if available
+			if ce.apiServer != nil {
+				ce.apiServer.UpdatePipelineStatus(pipelineID, "error", 0, err.Error())
+			}
+
+			return fmt.Errorf("failed to start pipeline %s: %w", pipelineID, err)
+		}
+	}
+
+	// Update pipeline status
+	ce.pipelineStatus[pipelineID] = struct {
+		State         string
+		CurrentLedger int64
+		StartTime     time.Time
+		LastError     string
+	}{
+		State:     "running",
+		StartTime: time.Now(),
+	}
+
+	// Update API server if available
+	if ce.apiServer != nil {
+		ce.apiServer.UpdatePipelineStatus(pipelineID, "running", 0, "")
+	}
+
+	log.Printf("Pipeline %s started successfully", pipelineID)
+	return nil
+}
+
+// StopPipeline stops a running pipeline
+func (ce *CoreEngine) StopPipeline(pipelineID string) error {
+	ce.statusMutex.Lock()
+	defer ce.statusMutex.Unlock()
+
+	pipeline, exists := ce.Pipelines[pipelineID]
+	if !exists {
+		return fmt.Errorf("pipeline %s not found", pipelineID)
+	}
+
+	// Stop the source, which should cascade to stop the pipeline
+	if src, ok := pipeline.Source.(interface{ Stop(context.Context) error }); ok {
+		if err := src.Stop(ce.ctx); err != nil {
+			ce.pipelineStatus[pipelineID] = struct {
+				State         string
+				CurrentLedger int64
+				StartTime     time.Time
+				LastError     string
+			}{
+				State:     "error",
+				LastError: err.Error(),
+			}
+
+			// Update API server if available
+			if ce.apiServer != nil {
+				ce.apiServer.UpdatePipelineStatus(pipelineID, "error", 0, err.Error())
+			}
+
+			return fmt.Errorf("failed to stop pipeline %s: %w", pipelineID, err)
+		}
+	}
+
+	// Update pipeline status
+	ce.pipelineStatus[pipelineID] = struct {
+		State         string
+		CurrentLedger int64
+		StartTime     time.Time
+		LastError     string
+	}{
+		State: "stopped",
+	}
+
+	// Update API server if available
+	if ce.apiServer != nil {
+		ce.apiServer.UpdatePipelineStatus(pipelineID, "stopped", 0, "")
+	}
+
+	log.Printf("Pipeline %s stopped successfully", pipelineID)
+	return nil
+}
+
+// UpdatePipelineProgress updates the progress information for a pipeline
+func (ce *CoreEngine) UpdatePipelineProgress(pipelineID string, currentLedger int64) {
+	ce.statusMutex.Lock()
+	defer ce.statusMutex.Unlock()
+
+	status, exists := ce.pipelineStatus[pipelineID]
+	if !exists {
+		return
+	}
+
+	status.CurrentLedger = currentLedger
+	ce.pipelineStatus[pipelineID] = status
+
+	// Update API server if available
+	if ce.apiServer != nil {
+		ce.apiServer.UpdatePipelineStatus(pipelineID, status.State, currentLedger, status.LastError)
+	}
+}
+
+// GetPipelineStatus returns the current status of a pipeline
+func (ce *CoreEngine) GetPipelineStatus(pipelineID string) (string, int64, time.Time, string, error) {
+	ce.statusMutex.RLock()
+	defer ce.statusMutex.RUnlock()
+
+	status, exists := ce.pipelineStatus[pipelineID]
+	if !exists {
+		return "", 0, time.Time{}, "", fmt.Errorf("pipeline %s not found", pipelineID)
+	}
+
+	return status.State, status.CurrentLedger, status.StartTime, status.LastError, nil
+}
+
+// GetAllPipelineStatuses returns the status of all pipelines
+func (ce *CoreEngine) GetAllPipelineStatuses() map[string]struct {
+	State         string
+	CurrentLedger int64
+	StartTime     time.Time
+	LastError     string
+} {
+	ce.statusMutex.RLock()
+	defer ce.statusMutex.RUnlock()
+
+	// Create a copy to avoid data races
+	statuses := make(map[string]struct {
+		State         string
+		CurrentLedger int64
+		StartTime     time.Time
+		LastError     string
+	}, len(ce.pipelineStatus))
+
+	for id, status := range ce.pipelineStatus {
+		statuses[id] = status
+	}
+
+	return statuses
+}
+
+// StartAPIServer initializes and starts the API server
+func (ce *CoreEngine) StartAPIServer(ctx context.Context, port int, authEnabled bool, username, password string) error {
+	apiServer := NewAPIServer(ce, port, authEnabled, username, password)
+	ce.apiServer = apiServer
+	return apiServer.Start(ctx)
+}
+
+// ShutdownAPIServer gracefully stops the API server
+func (ce *CoreEngine) ShutdownAPIServer(ctx context.Context) error {
+	if ce.apiServer != nil {
+		return ce.apiServer.Shutdown(ctx)
+	}
 	return nil
 }
