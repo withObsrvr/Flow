@@ -38,6 +38,7 @@ flow-engine.md
 wasm_exec.js
 wasm_exec.wasm
 wasm-sample.wasm
+flow-processor-latest-ledger.wasm
 bin/flow
 bin/graphql-api
 bin/schema-registry
