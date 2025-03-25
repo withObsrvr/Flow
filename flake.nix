@@ -37,17 +37,24 @@
               "cmd/graphql-api"
               "cmd/schema-registry"
             ];
+            # Use Go 1.24.1
+            go = pkgs.go_1_24;
           };
         };
 
         devShell = pkgs.mkShell {
           buildInputs = [ 
-            pkgs.go_1_23
+            pkgs.go_1_24
+            # Include a modern version of make
+            pkgs.gnumake
+            # Standard build tools
+            pkgs.gcc
           ];
           # Set a helpful shell configuration
           shellHook = ''
-            echo "Flow development environment"
+            echo "Flow development environment with Go 1.24"
             export GO111MODULE="on"
+            echo "Note: TinyGo is not compatible with Go 1.24 yet. For WASM plugins, use standard Go WASM build."
           '';
         };
       }
