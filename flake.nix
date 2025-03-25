@@ -43,10 +43,34 @@
               grep -n "WASMProcessorPlugin" internal/pluginmanager/wasm_loader.go || echo "WASMProcessorPlugin not found"
               grep -n "loadProcessorWASM" internal/pluginmanager/wasm_loader.go || echo "loadProcessorWASM not found"
               
-              # Copy the WASM file to a location that will be in the final package
-              mkdir -p $out/plugins
-              cp plugins/flow-processor-latest-ledger.wasm $out/plugins/
-              chmod +x $out/plugins/flow-processor-latest-ledger.wasm
+              # We'll copy the WASM file later in installPhase
+            '';
+            
+            # Add a custom install phase to include the WASM module
+            installPhase = ''
+              runHook preInstall
+              
+              # Create default install directories
+              mkdir -p $out/bin $out/plugins
+              
+              # Copy the compiled binaries
+              cp -v $GOPATH/bin/* $out/bin/
+              
+              # Copy the WASM plugin file from the source
+              # Note: This copy doesn't depend on the presence of the file in the plugins/ directory
+              # in the Nix build environment.
+              if [ -f ${./plugins/flow-processor-latest-ledger.wasm} ]; then
+                cp -v ${./plugins/flow-processor-latest-ledger.wasm} $out/plugins/
+                chmod +x $out/plugins/flow-processor-latest-ledger.wasm
+                echo "Copied WASM plugin to $out/plugins/"
+              else
+                echo "WASM plugin file not found at ${./plugins/flow-processor-latest-ledger.wasm}"
+                # Create a placeholder file so the directory exists
+                mkdir -p $out/plugins
+                touch $out/plugins/.placeholder
+              fi
+              
+              runHook postInstall
             '';
             # Specify the main packages to build
             subPackages = [ 
