@@ -87,6 +87,26 @@ func (l *WASMPluginLoader) CanLoad(path string) bool {
 func (l *WASMPluginLoader) LoadPlugin(path string) (pluginapi.Plugin, error) {
 	log.Printf("Loading WASM plugin from %s", path)
 
+	// Debug check - dump all *.wasm files in the plugins directory
+	if _, exists := os.LookupEnv("FLOW_DEBUG_WASM"); exists {
+		dir := filepath.Dir(path)
+		log.Printf("DEBUG WASM: Checking all WASM files in directory: %s", dir)
+		files, err := filepath.Glob(filepath.Join(dir, "*.wasm"))
+		if err != nil {
+			log.Printf("DEBUG WASM: Error globbing directory: %v", err)
+		} else {
+			log.Printf("DEBUG WASM: Found %d WASM files", len(files))
+			for i, file := range files {
+				fileInfo, _ := os.Stat(file)
+				size := int64(0)
+				if fileInfo != nil {
+					size = fileInfo.Size()
+				}
+				log.Printf("DEBUG WASM: [%d] %s (size: %d bytes)", i, file, size)
+			}
+		}
+	}
+
 	// Check if this is one of our special processor WASM modules
 	isProcessorWASM := filepath.Base(path) == "flow-processor-latest-ledger.wasm" ||
 		filepath.Base(path) == "flow-processor-effects.wasm" ||
@@ -94,6 +114,7 @@ func (l *WASMPluginLoader) LoadPlugin(path string) (pluginapi.Plugin, error) {
 		filepath.Base(path) == "flow-processor-contract-invocations.wasm"
 
 	if isProcessorWASM {
+		log.Printf("Processing WASM module detected: %s", path)
 		return l.loadProcessorWASM(path)
 	}
 
