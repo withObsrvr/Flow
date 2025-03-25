@@ -30,6 +30,10 @@
             # Ensure vendor directory is complete and correct before building
             preBuild = ''
               echo "Using vendor directory for building..."
+              
+              # Add a touch command to make sure the modified files are recognized
+              touch internal/pluginmanager/wasm_loader.go
+              touch internal/pluginmanager/loader.go
             '';
             # Specify the main packages to build
             subPackages = [ 
