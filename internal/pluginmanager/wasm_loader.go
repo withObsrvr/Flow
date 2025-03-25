@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -67,6 +68,18 @@ type WASMPluginLoader struct{}
 func (l *WASMPluginLoader) CanLoad(path string) bool {
 	isWasm := filepath.Ext(path) == ".wasm"
 	log.Printf("WASM Loader checking file: %s, is WASM: %v", path, isWasm)
+
+	// If FLOW_DEBUG_WASM is set, print more info
+	if _, exists := os.LookupEnv("FLOW_DEBUG_WASM"); exists {
+		fileInfo, err := os.Stat(path)
+		if err != nil {
+			log.Printf("DEBUG WASM: Error accessing file %s: %v", path, err)
+		} else {
+			log.Printf("DEBUG WASM: File %s exists, size: %d bytes, mode: %s",
+				path, fileInfo.Size(), fileInfo.Mode().String())
+		}
+	}
+
 	return isWasm
 }
 
@@ -202,6 +215,11 @@ func (l *WASMPluginLoader) loadStandardWASM(path string) (pluginapi.Plugin, erro
 // loadProcessorWASM loads a processor WASM module that uses string-based exports
 func (l *WASMPluginLoader) loadProcessorWASM(path string) (pluginapi.Plugin, error) {
 	log.Printf("Loading processor-style WASM module from %s", path)
+
+	// Debug environment check
+	if _, exists := os.LookupEnv("FLOW_DEBUG_WASM"); exists {
+		log.Printf("DEBUG WASM: Attempting to load processor WASM from %s", path)
+	}
 
 	// Read the WASM file
 	wasmBytes, err := ioutil.ReadFile(path)

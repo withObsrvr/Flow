@@ -26,6 +26,9 @@
             # Set environment variables for go builds
             env = {
               GO111MODULE = "on";
+              # Enable WASM debugging
+              FLOW_DEBUG_WASM = "1";
+              GOLOG_LEVEL = "debug";
             };
             # Ensure vendor directory is complete and correct before building
             preBuild = ''
@@ -34,6 +37,16 @@
               # Add a touch command to make sure the modified files are recognized
               touch internal/pluginmanager/wasm_loader.go
               touch internal/pluginmanager/loader.go
+              
+              # Print the contents of the files we modified to verify changes
+              echo "Verifying wasm_loader.go contents..."
+              grep -n "WASMProcessorPlugin" internal/pluginmanager/wasm_loader.go || echo "WASMProcessorPlugin not found"
+              grep -n "loadProcessorWASM" internal/pluginmanager/wasm_loader.go || echo "loadProcessorWASM not found"
+              
+              # Copy the WASM file to a location that will be in the final package
+              mkdir -p $out/plugins
+              cp plugins/flow-processor-latest-ledger.wasm $out/plugins/
+              chmod +x $out/plugins/flow-processor-latest-ledger.wasm
             '';
             # Specify the main packages to build
             subPackages = [ 
