@@ -24,7 +24,7 @@ pipeline:
     # WASM sample consumer plugin
     - name: wasm-sample
       type: consumer
-      plugin: ./examples/wasm-plugin-sample/wasm-sample.wasm
+      plugin: ./plugins/wasm-sample.wasm
       config:
         example_key: "example_value"
         demo_setting: true

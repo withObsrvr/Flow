@@ -42,7 +42,9 @@ type WASMPluginLoader struct{}
 
 // CanLoad returns true if the file has a .wasm extension
 func (l *WASMPluginLoader) CanLoad(path string) bool {
-	return filepath.Ext(path) == ".wasm"
+	isWasm := filepath.Ext(path) == ".wasm"
+	log.Printf("WASM Loader checking file: %s, is WASM: %v", path, isWasm)
+	return isWasm
 }
 
 // LoadPlugin loads a WASM plugin from the given path
@@ -52,8 +54,10 @@ func (l *WASMPluginLoader) LoadPlugin(path string) (pluginapi.Plugin, error) {
 	// Read the WASM file
 	wasmBytes, err := ioutil.ReadFile(path)
 	if err != nil {
+		log.Printf("Failed to read WASM file %s: %v", path, err)
 		return nil, fmt.Errorf("failed to read WASM file %s: %w", path, err)
 	}
+	log.Printf("Read WASM file successfully, size: %d bytes", len(wasmBytes))
 
 	// Create a context
 	ctx := context.Background()

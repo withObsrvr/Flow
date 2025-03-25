@@ -35,7 +35,9 @@ stellar-xdr-json.md
 flow.md
 flow_upgraded_implementation_plan.md
 flow-engine.md
-
+wasm_exec.js
+wasm_exec.wasm
+wasm-sample.wasm
 bin/flow
 bin/graphql-api
 bin/schema-registry
