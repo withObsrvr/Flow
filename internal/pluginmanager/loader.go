@@ -2,8 +2,10 @@ package pluginmanager
 
 import (
 	"fmt"
+	"log"
 	"path/filepath"
 	"plugin"
+	"sync"
 
 	"github.com/withObsrvr/pluginapi"
 )
@@ -15,6 +17,20 @@ type PluginLoader interface {
 
 	// LoadPlugin loads a plugin from the given path
 	LoadPlugin(path string) (pluginapi.Plugin, error)
+}
+
+// Global registry of plugin loaders
+var (
+	loadersMutex sync.RWMutex
+	loaders      []PluginLoader
+)
+
+// RegisterLoader adds a plugin loader to the global registry
+func RegisterLoader(loader PluginLoader) {
+	loadersMutex.Lock()
+	defer loadersMutex.Unlock()
+	loaders = append(loaders, loader)
+	log.Printf("Registered plugin loader: %T", loader)
 }
 
 // NativePluginLoader loads native Go plugins (.so files)
@@ -51,8 +67,17 @@ func (l *NativePluginLoader) LoadPlugin(path string) (pluginapi.Plugin, error) {
 
 // getRegisteredLoaders returns all registered plugin loaders
 func getRegisteredLoaders() []PluginLoader {
-	return []PluginLoader{
-		&NativePluginLoader{},
-		&WASMPluginLoader{},
+	// Register built-in loaders if this is the first time
+	if len(loaders) == 0 {
+		RegisterLoader(&NativePluginLoader{})
+		RegisterLoader(&WASMPluginLoader{})
 	}
+
+	loadersMutex.RLock()
+	defer loadersMutex.RUnlock()
+
+	// Return a copy of the loaders slice to prevent concurrent modification
+	result := make([]PluginLoader, len(loaders))
+	copy(result, loaders)
+	return result
 }
