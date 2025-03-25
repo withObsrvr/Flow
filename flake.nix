@@ -43,6 +43,7 @@
         devShell = pkgs.mkShell {
           buildInputs = [ 
             pkgs.go_1_23
+            pkgs.tinygo
           ];
           # Set a helpful shell configuration
           shellHook = ''

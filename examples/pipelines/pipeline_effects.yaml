@@ -1,5 +1,5 @@
 pipelines:
-  ContractEventsPipeline:
+  EffectsPipeline:
     source:
       type: "BufferedStorageSourceAdapter"
       config:
@@ -8,16 +8,14 @@ pipelines:
         num_workers: 10
         retry_limit: 3
         retry_wait: 5
-        start_ledger: 56310550
+        start_ledger: 56310560
         ledgers_per_file: 1
         files_per_partition: 64000
     processors:
-      - type: "flow/processor/contract-events"
+      - type: "flow/processor/effects"
         config:
           network_passphrase: "Public Global Stellar Network ; September 2015"
-      - type: "flow/processor/contract-filter"
-        config:
-          contract_id: "CB23WRDQWGSP6YPMY4UV5C4OW5CBTXKYN3XEATG7KJEZCXMJBYEHOUOV"
+
     consumers:
       - type: "SaveToZeroMQ"
         config:
