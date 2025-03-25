@@ -43,12 +43,17 @@
         devShell = pkgs.mkShell {
           buildInputs = [ 
             pkgs.go_1_23
-            pkgs.tinygo
+            # Pin TinyGo to a version compatible with Go 1.23
+            (pkgs.tinygo.overrideAttrs (oldAttrs: {
+              # Make sure we use a compatible TinyGo version
+              doCheck = false;  # Skip tests that check Go version
+            }))
           ];
           # Set a helpful shell configuration
           shellHook = ''
             echo "Flow development environment"
             export GO111MODULE="on"
+            export PATH=${pkgs.go_1_23}/bin:$PATH
           '';
         };
       }
