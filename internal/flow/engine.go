@@ -10,8 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"plugin"
+	"strings"
 	"time"
 
+	"github.com/withObsrvr/Flow/internal/pluginmanager"
 	"github.com/withObsrvr/Flow/pkg/schemaapi"
 	"github.com/withObsrvr/pluginapi"
 	"gopkg.in/yaml.v2"
@@ -180,10 +182,34 @@ func BuildPipeline(name string, def PipelineDefinition, reg *PluginRegistry) (*P
 	for i, pDef := range def.Processors {
 		log.Printf("Initializing processor %d: %s", i, pDef.Type)
 
+		// Attempt to retrieve the processor plugin by its type
 		proc, ok := reg.Processors[pDef.Type]
 		if !ok {
-			return nil, fmt.Errorf("processor plugin %s not found", pDef.Type)
+			log.Printf("Processor plugin %s not found in registry. Attempting fallback loading.", pDef.Type)
+
+			// Fallback: attempt to load processor plugin from file using pluginmanager.LoadPluginFromFile
+			// Convert processor type (e.g. "flow/processor/latest-ledger") to filename by replacing '/' with '-'
+			filename := strings.ReplaceAll(pDef.Type, "/", "-")
+
+			// Try with .so extension first
+			pluginPath := "./plugins/" + filename + ".so"
+			log.Printf("Trying to load processor plugin from file: %s", pluginPath)
+			p, loadErr := pluginmanager.LoadPluginFromFile(pluginPath)
+			if loadErr != nil {
+				log.Printf("Failed to load %s: %v. Trying .wasm extension.", pluginPath, loadErr)
+				pluginPath = "./plugins/" + filename + ".wasm"
+				log.Printf("Trying to load processor plugin from file: %s", pluginPath)
+				p, loadErr = pluginmanager.LoadPluginFromFile(pluginPath)
+				if loadErr != nil {
+					return nil, fmt.Errorf("processor plugin %s not found: tried .so and .wasm: %v", pDef.Type, loadErr)
+				}
+			}
+			if regErr := reg.Register(p); regErr != nil {
+				return nil, fmt.Errorf("failed to register processor plugin %s: %v", pDef.Type, regErr)
+			}
+			proc = p.(pluginapi.Processor)
 		}
+
 		if err := proc.Initialize(pDef.Config); err != nil {
 			return nil, fmt.Errorf("failed to initialize processor %s: %w", pDef.Type, err)
 		}
