@@ -56,7 +56,7 @@
               # Copy the compiled binaries
               cp -v $GOPATH/bin/* $out/bin/
               
-              # Build a minimal real WASM module instead of a JSON placeholder
+              # Build a minimal real WASM module for testing...
               echo "Building a real WASM module for testing..."
               
               # Create a temp directory for our minimal WASM module
@@ -93,7 +93,8 @@ EOF
               
               # Build the WASM module
               cd $TEMP_DIR
-              GOOS=wasip1 GOARCH=wasm $GOPATH/bin/go build -o flow-processor-latest-ledger.wasm main.go
+              # Use the Go binary from nixpkgs instead of $GOPATH/bin/go
+              GOOS=wasip1 GOARCH=wasm ${pkgs.go_1_24}/bin/go build -o flow-processor-latest-ledger.wasm main.go
               
               # Copy the WASM module to the output
               cp flow-processor-latest-ledger.wasm $out/plugins/
