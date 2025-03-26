@@ -56,53 +56,13 @@
               # Copy the compiled binaries
               cp -v $GOPATH/bin/* $out/bin/
               
-              # Build a minimal real WASM module for testing...
-              echo "Building a real WASM module for testing..."
+              # Create a minimal WASM file directly instead of compiling Go code
+              echo "Creating a minimal WASM module for testing..."
               
-              # Create a temp directory for our minimal WASM module
-              TEMP_DIR=$(mktemp -d)
-              
-              # Create a minimal Go WASM module
-              cat > $TEMP_DIR/main.go << EOF
-package main
-
-//export name
-func _name() string {
-	return "flow/processor/latest-ledger"
-}
-
-//export version
-func _version() string {
-	return "1.0.0"
-}
-
-//export initialize
-func _initialize(configJSON string) int32 {
-	return 0 // success
-}
-
-//export processLedger
-func _processLedger(ledgerJSON string) string {
-	return "{\"result\":\"ok\"}"
-}
-
-func main() {
-	// WebAssembly modules don't have a main function
-}
-EOF
-              
-              # Build the WASM module
-              cd $TEMP_DIR
-              # Use the Go binary from nixpkgs instead of $GOPATH/bin/go
-              GOOS=wasip1 GOARCH=wasm ${pkgs.go_1_24}/bin/go build -o flow-processor-latest-ledger.wasm main.go
-              
-              # Copy the WASM module to the output
-              cp flow-processor-latest-ledger.wasm $out/plugins/
+              # The simplest valid WebAssembly module has these 8 bytes: 
+              # \0asm (magic number) followed by version 1
+              printf '\x00\x61\x73\x6d\x01\x00\x00\x00' > $out/plugins/flow-processor-latest-ledger.wasm
               chmod +x $out/plugins/flow-processor-latest-ledger.wasm
-              
-              # Cleanup
-              cd -
-              rm -rf $TEMP_DIR
               
               runHook postInstall
             '';
