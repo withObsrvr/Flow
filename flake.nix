@@ -56,10 +56,52 @@
               # Copy the compiled binaries
               cp -v $GOPATH/bin/* $out/bin/
               
-              # Manually create a placeholder WASM file for testing purposes
-              echo "Creating test WASM file in $out/plugins/"
-              echo '{"name":"flow/processor/latest-ledger","version":"1.0.0"}' > $out/plugins/flow-processor-latest-ledger.wasm
+              # Build a minimal real WASM module instead of a JSON placeholder
+              echo "Building a real WASM module for testing..."
+              
+              # Create a temp directory for our minimal WASM module
+              TEMP_DIR=$(mktemp -d)
+              
+              # Create a minimal Go WASM module
+              cat > $TEMP_DIR/main.go << EOF
+package main
+
+//export name
+func _name() string {
+	return "flow/processor/latest-ledger"
+}
+
+//export version
+func _version() string {
+	return "1.0.0"
+}
+
+//export initialize
+func _initialize(configJSON string) int32 {
+	return 0 // success
+}
+
+//export processLedger
+func _processLedger(ledgerJSON string) string {
+	return "{\"result\":\"ok\"}"
+}
+
+func main() {
+	// WebAssembly modules don't have a main function
+}
+EOF
+              
+              # Build the WASM module
+              cd $TEMP_DIR
+              GOOS=wasip1 GOARCH=wasm $GOPATH/bin/go build -o flow-processor-latest-ledger.wasm main.go
+              
+              # Copy the WASM module to the output
+              cp flow-processor-latest-ledger.wasm $out/plugins/
               chmod +x $out/plugins/flow-processor-latest-ledger.wasm
+              
+              # Cleanup
+              cd -
+              rm -rf $TEMP_DIR
               
               runHook postInstall
             '';

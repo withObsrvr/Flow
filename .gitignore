@@ -43,6 +43,8 @@ bin/flow
 bin/graphql-api
 bin/schema-registry
 bin/query_accounts
+wasm_tester
+flow-processor-latest-ledger.wasm.valid
 *.db
 *.db-wal
 *.db-shm
