@@ -64,16 +64,6 @@
               printf '\x00\x61\x73\x6d\x01\x00\x00\x00' > $out/plugins/flow-processor-latest-ledger.wasm
               chmod +x $out/plugins/flow-processor-latest-ledger.wasm
               
-              # Create a mock source adapter plugin for testing
-              echo "Creating mock source adapter plugin..."
-              echo '{"name":"BufferedStorageSourceAdapter","version":"1.0.0","type":1}' > $out/plugins/flow-source-bufferedstorage-gcs.so
-              chmod +x $out/plugins/flow-source-bufferedstorage-gcs.so
-              
-              # Create a mock consumer plugin for testing
-              echo "Creating mock consumer plugin..."
-              echo '{"name":"SaveToZeroMQ","version":"1.0.0","type":3}' > $out/plugins/flow-consumer-zeromq.so
-              chmod +x $out/plugins/flow-consumer-zeromq.so
-              
               runHook postInstall
             '';
             # Specify the main packages to build
