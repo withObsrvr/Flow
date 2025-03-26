@@ -1,0 +1,15 @@
+pipelines:
+  TestWasmPipeline:
+    source:
+      type: "BufferedStorageSourceAdapter"
+      config:
+        test_mode: true  # Just a flag to indicate we're in test mode
+    processors:
+      - type: "flow/processor/latest-ledger"
+        plugin: "flow-processor-latest-ledger.wasm"
+        config:
+          test_mode: true
+    consumers:
+      - type: "SaveToZeroMQ"
+        config:
+          test_mode: true 
