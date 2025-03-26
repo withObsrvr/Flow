@@ -81,3 +81,13 @@ func getRegisteredLoaders() []PluginLoader {
 	copy(result, loaders)
 	return result
 }
+
+// LoadPluginFromFile iterates over registered loaders and tries to load a plugin from the given file
+func LoadPluginFromFile(path string) (pluginapi.Plugin, error) {
+	for _, loader := range getRegisteredLoaders() {
+		if loader.CanLoad(path) {
+			return loader.LoadPlugin(path)
+		}
+	}
+	return nil, fmt.Errorf("no suitable plugin loader found for file: %s", path)
+}

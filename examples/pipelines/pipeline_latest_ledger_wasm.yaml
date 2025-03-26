@@ -13,7 +13,7 @@ pipelines:
         files_per_partition: 64000
     processors:
       - type: "flow/processor/latest-ledger"
-        plugin: "flow-processor-latest-ledger.wasm"  # Simplified to just the filename
+        plugin: "DIR_PLACEHOLDER/plugins/flow-processor-latest-ledger.wasm" # Simplified to just the filename
         config:
           network_passphrase: "Public Global Stellar Network ; September 2015"
     consumers:
